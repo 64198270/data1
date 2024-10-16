@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>地図上に円を表示 (複数色)</title>
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+        integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+        crossorigin=""
+    />
+    <script
+        src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+        integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+        crossorigin=""
+    ></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        /* 地図のサイズ設定 */
+        #map {
+            height: 80vh;
+        }
+    
+        /* 情報ボックスのスタイル設定 */
+        #colorLegend {
+            position: absolute; /* 絶対位置 */
+            top: 380px; /* 画面上部からの位置 */
+            right: 10px; /* 右側からの位置 */
+            background-color: rgba(255, 255, 255, 0.8); /* 透明度を少し下げた背景 */
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000; /* 最前面に表示 */
+        }
+    </style>
+    
+</head>
+<body>
+    <div id="map" style="height: 80vh"></div>
+    <div id="colorLegend">
+        <div style="width: 20px; height: 20px; background-color: #FFFFFF; display: inline-block;"></div> 波の高さ: 50cm以下<br>
+        <div style="width: 20px; height: 20px; background-color: #0080ff; display: inline-block;"></div> 波の高さ: 1m前後<br>
+        <div style="width: 20px; height: 20px; background-color: #ebe41b; display: inline-block;"></div> 波の高さ: 2m前後<br>
+        <div style="width: 20px; height: 20px; background-color: #fd8f00; display: inline-block;"></div> 波の高さ: 4~6m<br>
+        <div style="width: 20px; height: 20px; background-color: #ff0000; display: inline-block;"></div> 波の高さ: 10~20m<br>
+        <div style="width: 20px; height: 20px; background-color: #800080; display: inline-block;"></div> 波の高さ: 30m以上<br>
+    </div>
+    <div id="gradient"></div>
+    <script>
+        const map = L.map('map', {
+            center: [36.5, 137.1],
+            zoom: 5,
+        });
+
+        const backgroundLayer = L.tileLayer(
+            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            {
+                maxZoom: 19,
+                attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            }
+        );
+
+        map.attributionControl.addAttribution(
+            '<a href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-P29-v2_0.html">国土数値情報 - 学校データ</a>',
+        );
+
+
+        const csvFiles = ['./h1983Tsunami.csv',
+                            './h1984Tsunami.csv',
+                            './h1985Tsunami.csv',
+                            './h1986Tsunami.csv',
+                            './h1987Tsunami.csv',
+                            './h1988Tsunami.csv',
+                            './h1989Tsunami.csv',
+                            './h1990Tsunami.csv',
+                            './h1991Tsunami.csv',
+                            './h1992Tsunami.csv',
+                            './h1993Tsunami.csv',
+                            './h1994Tsunami.csv',
+                            './h1995Tsunami.csv',
+                            './h1996Tsunami.csv',
+                            './h199701Tsunami.csv',
+                            './h199710Tsunami.csv',
+                            './h1998Tsunami.csv',
+                            './h1999Tsunami.csv',
+                            './h2000Tsunami.csv',
+                            './h2001Tsunami.csv',
+                            './h2002Tsunami.csv',
+                            './h2003Tsunami.csv',
+                            './h2004Tsunami.csv',
+                            './h2005Tsunami.csv',
+                            './h2006Tsunami.csv',
+                            './h2007Tsunami.csv',
+                            './h2008Tsunami.csv',
+                            './h2009Tsunami.csv',
+                            './h2010Tsunami.csv',
+                            './h2011Tsunami.csv',
+                            './h2012Tsunami.csv',
+                            './h2013Tsunami.csv',
+                            './h2014Tsunami.csv',
+                            './h2015Tsunami.csv',
+                            './h2016Tsunami.csv',
+                            './h2017Tsunami.csv',
+                            './h2018Tsunami.csv',
+                            './h2019Tsunami.csv',
+                            './h2020Tsunami.csv',
+                            './h2021Tsunami.csv',
+                            './h2022Tsunami.csv',
+                            './h202301Tsunami.csv',
+                            './h202302Tsunami.csv',
+                            './h202303Tsunami.csv',];
+
+        csvFiles.forEach(file => {
+            fetch(file)
+                .then(response => response.text())
+                .then(csvText => {
+                    Papa.parse(csvText, {
+                        header: false,
+                        complete: function(results) {
+                            results.data.forEach(row => {
+                                const lat = parseFloat(row[0]);
+                                const lng = parseFloat(row[1]);
+                                const height = parseFloat(row[2]);
+                                const mes = "";
+
+                                if (!isNaN(lat) && !isNaN(lng) && !isNaN(height)) {
+                                    let fillColor = 'blue';
+                                    let radius = height * 40000; // 波の高さに応じて半径を調整
+
+                                    if (height === 1) {
+                                        fillColor = '#FFFFFF';
+                                    } else if (height === 2) {
+                                        fillColor = '#0080ff';
+                                    } else if (height === 3) {
+                                        fillColor = '#ebe41b';
+                                    } else if (height === 4) {
+                                        fillColor = '#fd8f00';
+                                    } else if (height === 5) {
+                                        fillColor = '#ff0000';
+                                    } else if (height === 6) {
+                                        fillColor = '#800080';
+                                    }
+
+                                    L.circle([lat, lng], {
+                                        color: fillColor,
+                                        fillColor: fillColor,
+                                        fillOpacity: 0.5,
+                                        radius: radius // 波の高さに応じて半径を設定
+                                    })
+                                    .bindPopup(`緯度: ${lat}, 経度: ${lng}, 波の高さ: ${getWaveHeight(height)}`)
+                                    .addTo(map);
+                                }
+                            });
+                        },
+                        error: function(err) {
+                            console.error('CSVの解析に失敗しました:', err);
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('CSVファイルの読み込みに失敗しました:', error);
+                });
+        });
+        function getWaveHeight(height) {
+            switch (height) {
+                case 1: return '50cm以下';
+                case 2: return '1m前後';
+                case 3: return '2m前後';
+                case 4: return '4~6m';
+                case 5: return '10~20m';
+                case 6: return '30m以上';
+                default: return '不明';
+            }
+        }
+
+
+        map.addLayer(backgroundLayer);
+    </script>
+</body>
+</html>
