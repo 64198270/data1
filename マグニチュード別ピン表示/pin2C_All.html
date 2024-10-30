@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>地図上にピンを立てる (クラスタリングあり、カラーあり)</title>
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+        crossorigin=""
+    />
+    <script
+        src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+        crossorigin=""
+    ></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.3.0/dist/leaflet.markercluster.js"></script>
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet.markercluster@1.3.0/dist/MarkerCluster.css"
+    />
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet.markercluster@1.3.0/dist/MarkerCluster.Default.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        /* 地図のサイズ設定 */
+        #map {
+            height: 80vh;
+        }
+    
+        /* 情報ボックスのスタイル設定 */
+        #colorLegend {
+            position: absolute; /* 絶対位置 */
+            top: 380px; /* 画面上部からの位置 */
+            right: 10px; /* 右側からの位置 */
+            background-color: rgba(255, 255, 255, 0.8); /* 透明度を少し下げた背景 */
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000; /* 最前面に表示 */
+        }
+    </style>
+</head>
+<body>
+    <div id="map" style="height: 80vh"></div>
+    <div id="colorLegend">
+        <div style="width: 20px; height: 20px; background-color: #0080ff; display: inline-block;"></div> マグニチュード5~5.9<br>
+        <div style="width: 20px; height: 20px; background-color: #ebe41b; display: inline-block;"></div> マグニチュード6~6.9<br>
+        <div style="width: 20px; height: 20px; background-color: #ff0000; display: inline-block;"></div> マグニチュード7以上<br>
+    </div>
+    <div id="gradient"></div>
+    <script>
+        // 地図の初期設定
+        const map = L.map('map', {
+            center: [36.5, 137.1],
+            zoom: 5,
+        });
+
+        // 背景レイヤー設定
+        const backgroundLayer = L.tileLayer(
+            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            {
+                maxZoom: 19,
+                attribution:
+                    '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            }
+        ).addTo(map);
+
+        const csvFiles = ['./h1984_pickupM.csv',
+                        './h1985_pickupM.csv',
+                        './h1986_pickupM.csv',
+                        './h1987_pickupM.csv',
+                        './h1988_pickupM.csv',
+                        './h1989_pickupM.csv',
+                        './h1990_pickupM.csv',
+                        './h1991_pickupM.csv',
+                        './h1992_pickupM.csv',
+                        './h1993_pickupM.csv',
+                        './h1994_pickupM.csv',
+                        './h1995_pickupM.csv',
+                        './h1996_pickupM.csv',
+                        './h199701_pickupM.csv',
+                        './h199710_pickupM.csv',
+                        './h1998_pickupM.csv',
+                        './h1999_pickupM.csv',
+                        './h2000_pickupM.csv',
+                        './h2001_pickupM.csv',
+                        './h2002_pickupM.csv',
+                        './h2003_pickupM.csv',
+                        './h2004_pickupM.csv',
+                        './h2005_pickupM.csv',
+                        './h2006_pickupM.csv',
+                        './h2007_pickupM.csv',
+                        './h2008_pickupM.csv',
+                        './h2009_pickupM.csv',
+                        './h2010_pickupM.csv',
+                        './h2011_pickupM.csv',
+                        './h2012_pickupM.csv',
+                        './h2013_pickupM.csv',
+                        './h2014_pickupM.csv',
+                        './h2015_pickupM.csv',
+                        './h2016_pickupM.csv',
+                        './h2017_pickupM.csv',
+                        './h2018_pickupM.csv',
+                        './h2019_pickupM.csv',
+                        './h2020_pickupM.csv',
+                        './h2021_pickupM.csv',
+                        './h2022_pickupM.csv',
+                        './h202301_pickupM.csv',
+                        './h202302_pickupM.csv',
+                        './h202303_pickupM.csv']
+
+        csvFiles.forEach(file =>{
+            // CSVファイルを取得してピンを立てる
+            fetch(file)
+                .then(response => response.text())
+                .then(csvText => {
+                    Papa.parse(csvText, {
+                        header: false,
+                        complete: function(results) {
+                            // クラスタリング用のマーカーグループを作成
+                            const markers = L.markerClusterGroup();
+
+                            results.data.forEach(row => {
+                                const lat = parseFloat(row[0]); // 緯度
+                                const lng = parseFloat(row[1]); // 経度
+                                const magnitude = parseFloat(row[2]); // マグニチュード
+
+                                if (!isNaN(lat) && !isNaN(lng) && !isNaN(magnitude)) {
+                                    let markerColor = 'blue'; // デフォルト色
+
+                                    // マグニチュードに応じた色分け
+                                    if (magnitude >= 7) {
+                                        markerColor = 'red';
+                                    } else if (magnitude >= 6) {
+                                        markerColor = 'yellow';
+                                    }
+
+                                    // 雫型マーカーのSVGを作成
+                                    const svgIcon = `
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="45" viewBox="0 0 30 45">
+                                            <path d="M15 0C7.5 0 2 8.09 2 15c0 7.875 12 27 12 27s12-19.125 12-27c0-6.91-5.5-15-12-15z" fill="${markerColor}"/>
+                                            <circle cx="14" cy="13" r="4.5" fill="white"/> <!-- 上に移動 -->
+                                        </svg>
+                                    `;
+
+                                    // SVGをデータURLに変換
+                                    const iconUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgIcon);
+
+                                    // ピンをクラスタリンググループに追加
+                                    const marker = L.marker([lat, lng], {
+                                        icon: L.icon({
+                                            iconUrl: iconUrl,
+                                            iconSize: [30, 45], // サイズを維持
+                                            iconAnchor: [15, 45] // 矢印の位置を調整
+                                        })
+                                    }).bindPopup(`緯度: ${lat}, 経度: ${lng}, マグニチュード: ${magnitude}`);
+                                    
+                                    // クラスタリンググループにマーカーを追加
+                                    markers.addLayer(marker);
+                                }
+                            });
+
+                            // マーカーグループを地図に追加
+                            map.addLayer(markers);
+                        },
+                        error: function(err) {
+                            console.error('CSVの解析に失敗しました:', err);
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('CSVファイルの読み込みに失敗しました:', error);
+                });
+        });
+    </script>
+</body>
+</html>
