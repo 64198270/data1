@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>震度5弱以上の頻度別メッシュマップ</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  <style>
+    #map {
+      height: 600px;
+    }
+
+    .legend {
+      background: white;
+      line-height: 1.5;
+      padding: 10px;
+      border: 1px solid gray;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      cursor: pointer; /* カーソルをポインタにする */
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      margin-right: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>震度5以上の頻度別メッシュマップ</h1>
+  <div id="map"></div>
+
+  <script>
+    // 地図の初期設定
+    var map = L.map('map').setView([36.2048, 138.2529], 5); // 日本の中心座標
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+    }).addTo(map);
+
+    // カラースケール関数（データ数に応じて色を濃くする）
+    function getColor(d) {
+      return d >= 30 ? '#800026' :
+        d >= 20 ? '#BD0026' :
+          d >= 15 ? '#E31A1C' :
+            d >= 10 ? '#FC4E2A' :
+              d >= 5 ? '#FD8D3C' :
+                d >= 3 ? '#FEB24C' :
+                  '#FFFFE0';
+    }
+
+    // メッシュのサイズ（緯度・経度ごとに区切る間隔）
+    var meshSize = 1.0;
+
+    // メッシュの範囲（日本全体の緯度経度の範囲を指定）
+    var latMin = 24.0, latMax = 46.0; // 日本の南北緯度範囲
+    var lonMin = 122.0, lonMax = 153.0; // 日本の東西経度範囲
+
+    // CSVファイルリスト
+    var csvFiles = [
+      'h1983_pickup.csv',
+      'h1984_pickup.csv',
+      'h1985_pickup.csv',
+      'h1986_pickup.csv',
+      'h1987_pickup.csv',
+      'h1988_pickup.csv',
+      'h1989_pickup.csv',
+      'h1990_pickup.csv',
+      'h1991_pickup.csv',
+      'h1992_pickup.csv',
+      'h1993_pickup.csv',
+      'h1994_pickup.csv',
+      'h1995_pickup.csv',
+      'h1996_pickup.csv',
+      'h199701_pickup.csv',
+      'h199710_pickup.csv',
+      'h1998_pickup.csv',
+      'h1999_pickup.csv',
+      'h2000_pickup.csv',
+      'h2001_pickup.csv',
+      'h2002_pickup.csv',
+      'h2003_pickup.csv',
+      'h2004_pickup.csv',
+      'h2005_pickup.csv',
+      'h2006_pickup.csv',
+      'h2007_pickup.csv',
+      'h2008_pickup.csv',
+      'h2009_pickup.csv',
+      'h2010_pickup.csv',
+      'h2011_pickup.csv',
+      'h2012_pickup.csv',
+      'h2013_pickup.csv',
+      'h2014_pickup.csv',
+      'h2015_pickup.csv',
+      'h2016_pickup.csv',
+      'h2017_pickup.csv',
+      'h2018_pickup.csv',
+      'h2019_pickup.csv',
+      'h2020_pickup.csv',
+      'h2021_pickup.csv',
+      'h2022_pickup.csv',
+      'h202301_pickup.csv',
+      'h202302_pickup.csv',
+      'h202303_pickup.csv'
+    ];
+
+    var meshData = {};
+
+    // 全メッシュを初期化（全てのメッシュを0回で初期化）
+    for (var lat = latMin; lat < latMax; lat += meshSize) {
+      for (var lon = lonMin; lon < lonMax; lon += meshSize) {
+        var key = lat.toFixed(1) + ',' + lon.toFixed(1);
+        meshData[key] = 0;
+      }
+    }
+
+    // CSVファイルをすべて読み込み
+    csvFiles.forEach(function (file) {
+      Papa.parse(file, {
+        download: true,
+        header: true,
+        complete: function (results) {
+          var data = results.data;
+
+          // 緯度・経度データをメッシュごとにカウント
+          data.forEach(function (row) {
+            var lat = Math.floor(row.latitude / meshSize) * meshSize;
+            var lon = Math.floor(row.longitude / meshSize) * meshSize;
+            var key = lat.toFixed(1) + ',' + lon.toFixed(1);
+
+            if (meshData[key] !== undefined) {
+              meshData[key]++;
+            }
+          });
+
+          // すべてのCSVファイルが読み込まれた後に地図に描画
+          if (file === csvFiles[csvFiles.length - 1]) {
+            drawMeshMap();
+          }
+        }
+      });
+    });
+
+    // メッシュを描画する関数
+    function drawMeshMap(selectedCount) {
+    // 地図をクリア
+    map.eachLayer(function (layer) {
+      if (layer instanceof L.Rectangle) {
+        map.removeLayer(layer);
+      }
+    });
+
+    for (var key in meshData) {
+      var count = meshData[key];
+      var coords = key.split(',');
+      var lat = parseFloat(coords[0]);
+      var lon = parseFloat(coords[1]);
+
+    // 判例に基づいて描画
+    if (selectedCount === undefined || (count >= selectedCount[0] && count < selectedCount[1])) {
+      if (count > 0) { // カウントが0の場合は描画しない
+        var bounds = [
+          [lat, lon],
+          [lat + meshSize, lon + meshSize]
+        ];
+        
+        // メッシュを描画し、カーソルを合わせたときにデータを表示する
+        L.rectangle(bounds, { color: getColor(count), weight: 1, fillOpacity: 0.7 })
+          .bindTooltip("震度5弱以上の回数: " + count)
+          .addTo(map);
+      }
+    }
+  }
+}
+
+
+    // 地図上に凡例を追加する関数
+    const legend = L.control({ position: 'topright' });
+
+    legend.onAdd = function (map) {
+      const div = L.DomUtil.create('div', 'legend');
+      const labels = [
+        { color: '#800026', text: '30+', range: [30, 100] },
+        { color: '#BD0026', text: '20~30', range: [20, 30] },
+        { color: '#E31A1C', text: '15~20', range: [15, 20] },
+        { color: '#FC4E2A', text: '10~15', range: [10, 15] },
+        { color: '#FD8D3C', text: '5~10', range: [5, 10] },
+        { color: '#FEB24C', text: '3~5', range: [3, 5] },
+        { color: '#FFFFE0', text: '1~3', range: [1, 3] }
+      ];
+      labels.forEach(label => {
+        const item = `<div class="legend-item" onclick="filterMesh(${JSON.stringify(label.range)})">
+          <div class="legend-color" style="background-color:${label.color};"></div>
+          <span>${label.text}</span>
+        </div>`;
+        div.innerHTML += item;
+      });
+
+      return div;
+    };
+
+    // メッシュをフィルタリングする関数
+    function filterMesh(range) {
+      drawMeshMap(range);
+    }
+
+
+    legend.addTo(map);
+
+    // 地図上に「全データを表示」ボタンを追加する関数
+    const allDataButton = L.control({ position: 'bottomright' });
+
+    allDataButton.onAdd = function (map) {
+      const div = L.DomUtil.create('div', 'all-data-button');
+      div.innerHTML = '<button style="padding:6px; font-size:12px;">全データを表示</button>';
+      div.firstChild.onclick = function () {
+        drawMeshMap(); // 全メッシュを表示する関数を呼び出す
+    };
+    return div;
+  };
+
+allDataButton.addTo(map);
+
+    
+  </script>
+</body>
+
+</
