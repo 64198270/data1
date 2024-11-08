@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>震度円グラフ（震度別選択可）</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 600px;
+            width: 100%;
+        }
+
+        /* 凡例のスタイル */
+        .legend {
+            background: white;
+            padding: 10px;
+            line-height: 1.5em;
+            color: #333;
+            font-family: Arial, sans-serif;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+        }
+        .legend-color {
+            width: 18px;
+            height: 18px;
+            margin-right: 8px;
+        }
+
+        /* チェックボックスのスタイル */
+        .controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <h1>震度円グラフ(震度別選択可)</h1>
+    <div class="controls">
+        <label><input type="checkbox" class="intensity" value="5" checked> 震度 5</label><br>
+        <label><input type="checkbox" class="intensity" value="5.5" checked> 震度 5強</label><br>
+        <label><input type="checkbox" class="intensity" value="6" checked> 震度 6</label><br>
+        <label><input type="checkbox" class="intensity" value="6.5" checked> 震度 6強</label><br>
+        <label><input type="checkbox" class="intensity" value="7" checked> 震度 7</label>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        // 1. Leaflet map setup
+        const map = L.map('map').setView([35.682839, 139.759455], 5);
+
+        // 2. OpenStreetMapをタイルレイヤーとして追加
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // 3. 凡例を作成
+        const legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function(map) {
+            const div = L.DomUtil.create('div', 'legend');
+            const labels = [
+                { value: 5, color: '#fff8dc', text: '震度 5' },
+                { value: 5.5, color: '#ffb6c1', text: '震度 5強' },
+                { value: 6, color: '#ff4500', text: '震度 6' },
+                { value: 6.5, color: '#ff0000', text: '震度 6強' },
+                { value: 7, color: '#c71585', text: '震度 7' }
+            ];
+
+            labels.forEach(label => {
+                const item = `<div class="legend-item">
+                                <div class="legend-color" style="background-color:${label.color};"></div>
+                                <span>${label.text}</span>
+                              </div>`;
+                div.innerHTML += item;
+            });
+            return div;
+        };
+        legend.addTo(map);
+
+        // 4. CSVファイルのリスト
+        const csvFiles = [
+            'h202303_pickup.csv',
+            'h202302_pickup.csv',
+            'h202301_pickup.csv',
+            'h2022_pickup.csv',
+            'h2021_pickup.csv',
+            'h2020_pickup.csv',
+            'h2019_pickup.csv',
+            'h2018_pickup.csv',
+            'h2017_pickup.csv',
+            'h2016_pickup.csv',
+            'h2015_pickup.csv',
+            'h2014_pickup.csv',
+            'h2013_pickup.csv',
+            'h2012_pickup.csv',
+            'h2011_pickup.csv',
+            'h2010_pickup.csv',
+            'h2009_pickup.csv',
+            'h2008_pickup.csv',
+            'h2007_pickup.csv',
+            'h2006_pickup.csv',
+            'h2005_pickup.csv',
+            'h2004_pickup.csv',
+            'h2003_pickup.csv',
+            'h2002_pickup.csv',
+            'h2001_pickup.csv',
+            'h2000_pickup.csv',
+            'h1999_pickup.csv',
+            'h1998_pickup.csv',
+            'h199701_pickup.csv',
+            'h199710_pickup.csv',
+            'h1996_pickup.csv',
+            'h1995_pickup.csv',
+            'h1994_pickup.csv',
+            'h1993_pickup.csv',
+            'h1992_pickup.csv',
+            'h1991_pickup.csv',
+            'h1990_pickup.csv',
+            'h1989_pickup.csv',
+            'h1988_pickup.csv',
+            'h1987_pickup.csv',
+            'h1986_pickup.csv',
+            'h1985_pickup.csv',
+            'h1984_pickup.csv',
+            'h1983_pickup.csv'
+        ];
+
+        // 5. 各データを保持するためのレイヤーを作成
+        const circlesLayer = L.layerGroup().addTo(map);
+
+        // 6. CSVファイルを読み込む
+        Promise.all(csvFiles.map(file => d3.csv(file)))
+            .then(datasets => {
+                datasets.forEach(data => {
+                    data.forEach(d => {
+                        const lat = +d.latitude;
+                        const lon = +d.longitude;
+                        const value = +d.value;
+                        const damage = d.damage; // damageの値を取得
+
+                        // 円を描画する際にdamageも渡す
+                        drawCircle(lat, lon, value, damage);
+                    });
+                });
+                updateCircles(); // 初期表示の円を更新
+            })
+            .catch(error => {
+                console.error('Error loading the CSV files:', error);
+            });
+
+        // 7. 円を描画する関数
+        function drawCircle(lat, lon, value, damage) {
+            let color;
+            if (value === 5) {
+                color = '#fff8dc';
+            } else if (value === 5.5) {
+                color = '#ffb6c1';
+            } else if (value === 6) {
+                color = '#ff4500';
+            } else if (value === 6.5) {
+                color = '#ff0000';
+            } else if (value === 7) {
+                color = '#c71585';
+            } else {
+                return;
+            }
+
+            // 円を作成してレイヤーに追加
+            const circle = L.circle([lat, lon], {
+                radius: value * value * value * 280,
+                color: color,
+                fillColor: color,
+                fillOpacity: 0.5
+            });
+
+            // 数字に対応する被害内容のマッピング
+            const damageDescriptions = {
+                '1': '壁や地面に裂が生じる程度の微小被害',
+                '2': '家屋の破損、道路の損壊などが生じる程度の小被害',
+                '3': '複数の死者または複数の全壊家屋が生じる程度',
+                '4': '死者20人以上または家屋全壊1千戸以上',
+                '5': '死者200人以上または家屋全壊1万戸以上',
+                '6': '死者2千人以上または家屋全壊10万戸以上',
+                '7': '死者2万人以上または家屋全壊100万戸以上'
+            };
+
+            // damageに基づいてツールチップの内容を設定
+            circle.bindTooltip(
+                damage && damage.trim() !== '' 
+                    ? (damageDescriptions[damage] || '被害不明') 
+                    : '被害なし', 
+                {
+                    permanent: false,
+                    direction: 'top'
+                }
+            );
+
+            circle.value = value;
+            circlesLayer.addLayer(circle);
+        }
+
+        // 8. チェックボックスが変更されたときの処理
+        document.querySelectorAll('.intensity').forEach(checkbox => {
+            checkbox.addEventListener('change', updateCircles);
+        });
+
+        // 9. 円の表示を更新する関数
+        function updateCircles() {
+            circlesLayer.clearLayers();
+            const selectedValues = Array.from(document.querySelectorAll('.intensity:checked')).map(checkbox => +checkbox.value);
+
+            // 再度円を描画
+            Promise.all(csvFiles.map(file => d3.csv(file)))
+                .then(datasets => {
+                    datasets.forEach(data => {
+                        data.forEach(d => {
+                            const lat = +d.latitude;
+                            const lon = +d.longitude;
+                            const value = +d.value;
+                            const damage = d.damage; // damageの値を取得
+
+                            if (selectedValues.includes(value)) {
+                                drawCircle(lat, lon, value, damage);
+                            }
+                        });
+                    });
+                });
+        }
+    </script>
+</body>
+</html>
